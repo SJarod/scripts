@@ -1,0 +1,9 @@
+for f in ./*.*
+do
+    year_var="$(date -r "$f" +20%y)"
+    month_var="$(date -r "$f" +%m)"
+
+    mkdir -p ${year_var}
+    mkdir -p ${year_var}/${month_var}
+    mv -v "$f" ${year_var}/${month_var}/"$f"
+done
