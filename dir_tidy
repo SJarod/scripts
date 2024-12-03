@@ -1,5 +1,6 @@
-# This script moves all files the folder where it is executed to
-# subdirectories such as : $YYYY/$MM/$file
+# This script moves all files from a directory
+# to a tree of subdirectories respecting the files date
+# such as : $YYYY/$MM/$file
 # It can be used to tidy photos folders.
 
 for f in ./*.*
