@@ -1,0 +1,13 @@
+# unable lfs and only track files heavier than 50Mb
+
+git lfs install
+
+FILES=$(find . -size +50M | grep -v "git")
+
+for f in $FILES
+do
+    FILENAME="${f:2}"
+
+    echo $FILENAME
+    git lfs track
+done
