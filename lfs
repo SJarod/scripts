@@ -1,4 +1,4 @@
-# unable lfs and only track files heavier than 50Mb
+# enable lfs and only track files heavier than 50Mb
 # migrate the git files to git lfs
 
 git lfs install
