@@ -1,13 +1,19 @@
 # unable lfs and only track files heavier than 50Mb
+# migrate the git files to git lfs
 
 git lfs install
 
-FILES=$(find . -size +50M | grep -v "git")
+FILES=$(find . -size +50M | grep -v '.git')
+
+echo "files to migrate :"
+echo $FILES
 
 for f in $FILES
 do
     FILENAME="${f:2}"
 
     echo $FILENAME
-    git lfs track
+    git lfs migrate import --include="$FILENAME"
 done
+
+git lfs migrate info
