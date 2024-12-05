@@ -1,0 +1,11 @@
+# remove all files with the specified string from a git history
+
+FILES=$(find . | grep "$@")
+
+for f in $FILES
+do
+    FILENAME="${f:2}"
+
+    echo $FILENAME
+    git filter-repo --invert-paths --path $FILENAME
+done
