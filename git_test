@@ -1,0 +1,25 @@
+# initialize a git repository for testing
+
+git init
+git config user.email "x"
+git config user.name "x"
+
+touch a b c d e f g
+git add .
+git commit -m "Added files"
+
+echo aa > a
+echo bb > b
+git add .
+git commit -m "changed a and b files"
+
+echo cc > c
+echo dd > d
+git add .
+git commit -m "changed c and d files"
+
+mkdir folder
+echo aa > folder/a
+echo bb > folder/b
+git add .
+git commit -m "Added files in a folder"
