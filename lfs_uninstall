@@ -2,13 +2,11 @@
 # uninstall lfs
 
 FILES=$(git lfs ls-files --all -n)
-
 git lfs fetch --all
 
 for f in $FILES
 do
-    FILENAME="$f"
-
+    FILENAME='"'$f'"'
     echo $FILENAME
     git lfs checkout $FILENAME
     git lfs migrate export --include=$FILENAME
