@@ -4,15 +4,34 @@
 FILES=$(git lfs ls-files --all -n)
 git lfs fetch --all
 
-for f in $FILES
+
+# loop while not all LFS files have been exported
+for (( ; ; ))
 do
-    FILENAME='"'$f'"'
-    echo $FILENAME
-    git lfs checkout $FILENAME
-    git lfs migrate export --include=$FILENAME
+
+    for f in $FILES
+    do
+        FILENAME='"'$f'"'
+        echo $FILENAME
+        git lfs checkout $FILENAME
+        git lfs migrate export --include=$FILENAME
+    done
+
+    # check if there are LFS files remaining
+    RESULT=$(git lfs migrate info | grep "LFS")
+    if [ -z "$RESULT" ]
+    then
+        # success
+        echo "All files have been exported
+        break
+    else
+        # failure
+        echo "Trying again"
+    fi
+
 done
 
-git lfs migrate info
+
 git lfs uninstall
 
 git filter-repo --force --invert-paths --path ".gitattributes"
