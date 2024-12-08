@@ -3,15 +3,14 @@
 
 FILES=$(git lfs ls-files --all -n)
 
-echo "files to migrate :"
-echo $FILES
+git lfs fetch --all
 
 for f in $FILES
 do
     FILENAME="$f"
 
     echo $FILENAME
-    git lfs migrate export --include="$FILENAME"
+    git lfs migrate export --include=$FILENAME
 done
 
 git lfs migrate info
