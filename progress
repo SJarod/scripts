@@ -32,7 +32,10 @@
 
 # Function to display help
 function display_help() {
-    head -n 18 "$0" | tail -n 14  # Extracts the documentation section from the script itself
+    # Display only the first 30 lines of the script (documentation)
+    echo "==============================================="
+    head -n 30 "$0"    # Show the first 30 lines (documentation)
+    echo "==============================================="
 }
 
 # Function to display the progress bar
@@ -98,20 +101,24 @@ if [[ ! -f "$input_script" ]]; then
     exit 1
 fi
 
-# Count the number of lines in the input script
-lct=$(wc -l <"$input_script")
+# Filter out commented lines (#) and variable assignments (=)
+# Use grep to exclude lines starting with # or containing =
+filtered_lines=$(grep -vE '^\s*#|=.*$' "$input_script")
+
+# Count the number of valid lines (excluding comments and assignments)
+lct=$(echo "$filtered_lines" | wc -l)
 tot=${lct:-0}         # Total number of lines (default 0 if lct is empty)
 
 # Check that the script is not empty
 if (( tot == 0 )); then
-    echo "Error: The input script is empty."
+    echo "Error: The input script has no executable commands."
     exit 1
 fi
 
 # Start time
 beg=$(date +%s.%N)
 
-# Read and execute each line of the script
+# Read and execute each filtered line of the script
 i=0
 while IFS= read -r line; do
     ((i++))  # Increment the iteration counter
@@ -141,7 +148,7 @@ while IFS= read -r line; do
 
     # Display the progress bar
     display_progress_bar "$pc" "$bar_width"
-done < "$input_script"
+done <<< "$filtered_lines"
 
 # Calculate total execution time
 end=$(date +%s.%N)
