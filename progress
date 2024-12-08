@@ -1,12 +1,44 @@
-# https://unix.stackexchange.com/a/32735
-# made with ChatGPT
-
 #!/bin/bash
+
+# ===============================================
+# Progress Script
+# ===============================================
+# This script executes another script line by line, showing a dynamic 
+# progress bar to indicate the execution progress. You can also pass options
+# to the input script while executing it.
+#
+# Usage:
+#   bash progress_script.sh [OPTIONS]
+#
+# Options:
+#   --verbose, -v          Show the output of each command executed from the input script.
+#   --input, -i <file>     Specify the input script to be executed. This is a required option.
+#   --help, -h             Show this help message.
+#   --width, -w <number>   Specify the width of the progress bar (default: 50).
+#   --additional-args      Pass additional arguments to the input script.
+#
+# Examples:
+#   bash progress_script.sh --verbose --input input_script.sh
+#   bash progress_script.sh -i input_script.sh -v
+#   bash progress_script.sh -w 70 --input input_script.sh
+#   bash progress_script.sh --input input_script.sh --verbose --width 60
+#   bash progress_script.sh --input input_script.sh --additional-args "-d /path/to/dir -f filename"
+#   
+# The '--verbose' option displays the output of the commands being executed.
+# The '--width' option allows you to control the width of the progress bar.
+# The '--additional-args' allows you to pass additional parameters to the input script.
+#
+# ===============================================
+
+# Function to display help
+function display_help() {
+    head -n 18 "$0" | tail -n 14  # Extracts the documentation section from the script itself
+}
 
 # Function to display the progress bar
 function display_progress_bar() {
     local progress=$1
-    local bar_length=50  # Length of the progress bar
+    local bar_length=$2  # Width of the progress bar
     local filled_length=$((progress * bar_length / 100))
     local empty_length=$((bar_length - filled_length))
 
@@ -18,9 +50,50 @@ function display_progress_bar() {
     printf "\r\e[1mProgress: [${bar}${spaces}\e[0m] \e[33m${progress}%%\e[0m"
 }
 
-# Main script starts here
-input_script="$1"     # The script to execute
-if [ ! -f "$input_script" ]; then
+# Initialize default values
+verbose=0
+input_script=""
+bar_width=50
+extra_args=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --verbose|-v)
+            verbose=1
+            shift
+            ;;
+        --input|-i)
+            input_script="$2"
+            shift 2
+            ;;
+        --help|-h)
+            display_help
+            exit 0
+            ;;
+        --width|-w)
+            bar_width="$2"
+            shift 2
+            ;;
+        --additional-args)
+            extra_args="$2"
+            shift 2
+            ;;
+        *)
+            extra_args="$extra_args $1"  # Capture additional arguments for input script
+            shift
+            ;;
+    esac
+done
+
+# Check that an input script is specified
+if [[ -z "$input_script" ]]; then
+    echo "Error: You must specify an input script using --input or -i."
+    exit 1
+fi
+
+# Check that the input script exists
+if [[ ! -f "$input_script" ]]; then
     echo "Error: The file '$input_script' does not exist."
     exit 1
 fi
@@ -35,30 +108,39 @@ if (( tot == 0 )); then
     exit 1
 fi
 
-beg=$(date +%s.%N)    # Start time (seconds and nanoseconds)
+# Start time
+beg=$(date +%s.%N)
 
 # Read and execute each line of the script
 i=0
 while IFS= read -r line; do
-    ((i++))           # Increment the iteration counter
+    ((i++))  # Increment the iteration counter
 
-    # Display the command being executed
-    echo -e "\nExecuting: $line"
+    # Display the command being executed (only if verbose is enabled)
+    if (( verbose )); then
+        echo -e "\nExecuting: $line"
+    fi
 
     # Measure the time taken by the command
     cmd_start=$(date +%s.%N)
-    eval "$line"       # Execute the command (output displayed directly)
+    if (( verbose )); then
+        eval "$line $extra_args"  # Pass extra arguments to the input script
+    else
+        eval "$line $extra_args" &>/dev/null  # Suppress output
+    fi
     cmd_end=$(date +%s.%N)
 
     # Calculate execution time for the current command
     cmd_time=$(awk "BEGIN {print $cmd_end - $cmd_start}")
-    echo "Command execution time: ${cmd_time}s"
+    if (( verbose )); then
+        echo "Command execution time: ${cmd_time}s"
+    fi
 
     # Calculate progress percentage
     pc=$(awk "BEGIN {x=($i * 100) / $tot; if (x<1) print 0; print int(x)}")
 
     # Display the progress bar
-    display_progress_bar "$pc"
+    display_progress_bar "$pc" "$bar_width"
 done < "$input_script"
 
 # Calculate total execution time
@@ -66,5 +148,8 @@ end=$(date +%s.%N)
 total_time=$(awk "BEGIN {print $end - $beg}")
 
 # Ensure the progress bar remains visible at the end
-display_progress_bar 100
+display_progress_bar 100 "$bar_width"
 echo -e "\nTotal execution time: ${total_time}s"
+
+# https://unix.stackexchange.com/a/32735
+# made with ChatGPT
