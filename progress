@@ -1,0 +1,70 @@
+# https://unix.stackexchange.com/a/32735
+# made with ChatGPT
+
+#!/bin/bash
+
+# Function to display the progress bar
+function display_progress_bar() {
+    local progress=$1
+    local bar_length=50  # Length of the progress bar
+    local filled_length=$((progress * bar_length / 100))
+    local empty_length=$((bar_length - filled_length))
+
+    # Generate the progress bar
+    local bar=$(printf "\e[42m%.0s" $(seq 1 $filled_length))  # Green filled part
+    local spaces=$(printf "\e[40m%.0s" $(seq 1 $empty_length))  # Black empty part
+
+    # Print the progress bar with percentage
+    printf "\r\e[1mProgress: [${bar}${spaces}\e[0m] \e[33m${progress}%%\e[0m"
+}
+
+# Main script starts here
+input_script="$1"     # The script to execute
+if [ ! -f "$input_script" ]; then
+    echo "Error: The file '$input_script' does not exist."
+    exit 1
+fi
+
+# Count the number of lines in the input script
+lct=$(wc -l <"$input_script")
+tot=${lct:-0}         # Total number of lines (default 0 if lct is empty)
+
+# Check that the script is not empty
+if (( tot == 0 )); then
+    echo "Error: The input script is empty."
+    exit 1
+fi
+
+beg=$(date +%s.%N)    # Start time (seconds and nanoseconds)
+
+# Read and execute each line of the script
+i=0
+while IFS= read -r line; do
+    ((i++))           # Increment the iteration counter
+
+    # Display the command being executed
+    echo -e "\nExecuting: $line"
+
+    # Measure the time taken by the command
+    cmd_start=$(date +%s.%N)
+    eval "$line"       # Execute the command (output displayed directly)
+    cmd_end=$(date +%s.%N)
+
+    # Calculate execution time for the current command
+    cmd_time=$(awk "BEGIN {print $cmd_end - $cmd_start}")
+    echo "Command execution time: ${cmd_time}s"
+
+    # Calculate progress percentage
+    pc=$(awk "BEGIN {x=($i * 100) / $tot; if (x<1) print 0; print int(x)}")
+
+    # Display the progress bar
+    display_progress_bar "$pc"
+done < "$input_script"
+
+# Calculate total execution time
+end=$(date +%s.%N)
+total_time=$(awk "BEGIN {print $end - $beg}")
+
+# Ensure the progress bar remains visible at the end
+display_progress_bar 100
+echo -e "\nTotal execution time: ${total_time}s"
