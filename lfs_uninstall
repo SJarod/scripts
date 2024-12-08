@@ -10,6 +10,7 @@ do
     FILENAME="$f"
 
     echo $FILENAME
+    git lfs checkout $FILENAME
     git lfs migrate export --include=$FILENAME
 done
 
