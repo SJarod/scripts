@@ -111,3 +111,5 @@ eval "$OBLITERATE .idea"
 
 # Completion message
 echo "Repository cloned and cleaned successfully."
+
+# improved by ChatGPT
