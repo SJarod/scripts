@@ -1,0 +1,28 @@
+# clone a repository and cleans it
+# export all lfs files into git files
+# remove Unreal files from history
+# remove IDE files from history
+# and leave the repo as is
+# example : ./clone+clean https://url.com folder
+
+REPO=$1
+DIR=$2
+
+LFS_UNINSTALL=$(curl https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/lfs_uninstall)
+OBLITERATE=$(curl https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/obliterate)
+
+git clone $REPO $DIR
+
+cd $DIR
+
+eval "$LFS_UNINSTALL"
+
+# obliterate Unreal files
+eval "$OBLITERATE StarterContent"
+eval "$OBLITERATE Intermediate"
+eval "$OBLITERATE Saved"
+
+# obliterate IDE files
+eval "$OBLITERATE .vs"
+eval "$OBLITERATE .vsconfig"
+eval "$OBLITERATE .idea"
