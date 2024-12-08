@@ -1,5 +1,6 @@
 # remove all files with the specified string from a git history
 
+# obliterate files that are present in directory
 FILES=$(find . | grep "$@")
 
 for f in $FILES
@@ -9,3 +10,6 @@ do
     echo $FILENAME
     git filter-repo --force --invert-paths --path $FILENAME
 done
+
+# obliterate files following a pattern in the history
+git filter-repo --force --invert-paths --path-regex '.*$@.*'
