@@ -1,11 +1,16 @@
+# this script is used to push large trees using git
+# it pushes every commit from a specified branch
+# to a specified remote branch one by one
+
 REMOTE=$1
-REMOTE_BRANCH=$2
+BRANCH=$2
+REMOTE_BRANCH=$3
 
 N=$(git rev-list --count --all)
 
 for (( i=$N-1; i>=1; i-- ))
 do
-	commit_num="master~"$i
+	commit_num=$BRANCH"~"$i
 	sha=$(git log $commit_num | grep -m1 "commit")
 	sha="${sha//commit }"
 	echo "pushing "$sha
