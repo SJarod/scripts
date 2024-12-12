@@ -1,0 +1,17 @@
+REMOTE=$1
+REMOTE_BRANCH=$2
+
+N=$(git rev-list --count --all)
+
+for (( i=$N-1; i>=1; i-- ))
+do
+	commit_num="master~"$i
+	sha=$(git log $commit_num | grep -m1 "commit")
+	sha="${sha//commit }"
+	echo "pushing "$sha
+
+	git push $REMOTE $sha:$REMOTE_BRANCH
+done
+
+echo "pushing master last commit"
+git push origin master
