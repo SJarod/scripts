@@ -1,22 +1,77 @@
-# this script is used to push large trees using git
-# it pushes every commit from a specified branch
-# to a specified remote branch one by one
+#!/bin/bash
+
+# Script to push every commit from a branch to a remote branch individually.
+# Usage:
+#   ./script.sh [-f] [-h] <remote> <branch> <remote_branch>
+
+# Display help documentation
+function show_help {
+    echo "Usage: $0 [OPTIONS] <REMOTE> <BRANCH> <REMOTE_BRANCH>"
+    echo
+    echo "This script pushes every commit from a specified branch"
+    echo "to a specified remote branch, one by one."
+    echo
+    echo "Options:"
+    echo "  -f    Use 'git push -f' to force push commits."
+    echo "  -h    Show this help message."
+    exit 0
+}
+
+# Default values
+FORCE_PUSH=""
+
+# Parse options
+while getopts ":fh" opt; do
+    case $opt in
+        f)
+            FORCE_PUSH="-f"
+            ;;
+        h)
+            show_help
+            ;;
+        ?)
+            echo "Invalid option: -$OPTARG" >&2
+            show_help
+            ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+# Validate arguments
+if [ "$#" -ne 3 ]; then
+    echo "Error: Invalid number of arguments."
+    show_help
+fi
 
 REMOTE=$1
 BRANCH=$2
 REMOTE_BRANCH=$3
 
-N=$(git rev-list --count --all)
+# Count the number of commits
+N=$(git rev-list --count $BRANCH)
 
-for (( i=$N-1; i>=1; i-- ))
-do
-	commit_num=$BRANCH"~"$i
-	sha=$(git log $commit_num | grep -m1 "commit")
-	sha="${sha//commit }"
-	echo "pushing "$sha
+# Push each commit individually
+for (( i=$N-1; i>=1; i-- )); do
+    commit_num="$BRANCH~$i"
+    sha=$(git log $commit_num -1 --format="%H")
+    echo "Pushing commit $sha"
 
-	git push $REMOTE $sha:$REMOTE_BRANCH
+    git push $FORCE_PUSH $REMOTE $sha:$REMOTE_BRANCH
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to push commit $sha"
+        exit 1
+    fi
 done
 
-echo "pushing master last commit"
-git push origin master
+# Push the last commit (branch tip)
+echo "Pushing the last commit of $BRANCH"
+git push $FORCE_PUSH $REMOTE $BRANCH:$REMOTE_BRANCH
+
+if [ $? -eq 0 ]; then
+    echo "All commits pushed successfully."
+else
+    echo "Error: Failed to push the last commit."
+    exit 1
+fi
+
+# upgraded with ChatGPT
