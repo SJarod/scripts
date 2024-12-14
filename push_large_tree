@@ -4,16 +4,23 @@
 # Usage:
 #   ./script.sh [-f] [-h] <remote> <branch> <remote_branch>
 
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
 # Display help documentation
 function show_help {
-    echo "Usage: $0 [OPTIONS] <REMOTE> <BRANCH> <REMOTE_BRANCH>"
+    echo -e "${BLUE}Usage: $0 [OPTIONS] <REMOTE> <BRANCH> <REMOTE_BRANCH>${NC}"
     echo
-    echo "This script pushes every commit from a specified branch"
-    echo "to a specified remote branch, one by one."
+    echo -e "${YELLOW}This script pushes every commit from a specified branch"
+    echo -e "to a specified remote branch, one by one.${NC}"
     echo
-    echo "Options:"
-    echo "  -f    Use 'git push -f' to force push commits."
-    echo "  -h    Show this help message."
+    echo -e "${GREEN}Options:${NC}"
+    echo -e "  -f    Use 'git push -f' to force push commits."
+    echo -e "  -h    Show this help message."
     exit 0
 }
 
@@ -30,7 +37,7 @@ while getopts ":fh" opt; do
             show_help
             ;;
         ?)
-            echo "Invalid option: -$OPTARG" >&2
+            echo -e "${RED}Invalid option: -$OPTARG${NC}" >&2
             show_help
             ;;
     esac
@@ -39,7 +46,7 @@ shift $((OPTIND - 1))
 
 # Validate arguments
 if [ "$#" -ne 3 ]; then
-    echo "Error: Invalid number of arguments."
+    echo -e "${RED}Error: Invalid number of arguments.${NC}"
     show_help
 fi
 
@@ -50,28 +57,42 @@ REMOTE_BRANCH=$3
 # Count the number of commits
 N=$(git rev-list --count $BRANCH)
 
+# Function to retry a push until it succeeds
+function retry_push {
+    local push_command="$1"
+    local commit_sha="$2"
+
+    while true; do
+        eval "$push_command"
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}Successfully pushed commit $commit_sha${NC}"
+            break
+        else
+            echo -e "${YELLOW}Retrying push for commit $commit_sha...${NC}"
+            sleep 2
+        fi
+    done
+}
+
 # Push each commit individually
 for (( i=$N-1; i>=1; i-- )); do
     commit_num="$BRANCH~$i"
     sha=$(git log $commit_num -1 --format="%H")
-    echo "Pushing commit $sha"
+    echo -e "${BLUE}Pushing commit $sha${NC}"
 
-    git push $FORCE_PUSH $REMOTE $sha:$REMOTE_BRANCH
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to push commit $sha"
-        exit 1
-    fi
+    retry_push "git push $FORCE_PUSH $REMOTE $sha:$REMOTE_BRANCH" "$sha"
 done
 
 # Push the last commit (branch tip)
-echo "Pushing the last commit of $BRANCH"
-git push $FORCE_PUSH $REMOTE $BRANCH:$REMOTE_BRANCH
+echo -e "${BLUE}Pushing the last commit of $BRANCH${NC}"
+retry_push "git push $FORCE_PUSH $REMOTE $BRANCH:$REMOTE_BRANCH" "$BRANCH"
 
+# Ensure the last push was successful
 if [ $? -eq 0 ]; then
-    echo "All commits pushed successfully."
+    echo -e "${GREEN}All commits pushed successfully.${NC}"
 else
-    echo "Error: Failed to push the last commit."
-    exit 1
+    echo -e "${RED}Error: Failed to push the last commit. Retrying...${NC}"
+    retry_push "git push $FORCE_PUSH $REMOTE $BRANCH:$REMOTE_BRANCH" "$BRANCH"
 fi
 
 # upgraded with ChatGPT
