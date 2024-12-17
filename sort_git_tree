@@ -1,0 +1,10 @@
+N=$(git rev-list --count --all)
+echo "total commit processed : "$N
+
+for SHA in $(git rev-list --all)
+do
+  echo $SHA
+  DATE=$(git show --no-patch --format=%ci $SHA)
+
+  echo $DATE
+done
