@@ -1,10 +1,66 @@
-N=$(git rev-list --count --all)
-echo "total commit processed : "$N
+#!/bin/bash
 
-for SHA in $(git rev-list --all)
-do
-  echo $SHA
-  DATE=$(git show --no-patch --format=%ci $SHA)
+# Display help information
+usage() {
+  echo "Usage: $0 [options]"
+  echo "This script iterates through all the commits in a Git repository and displays the SHA and the commit date."
+  echo "Options:"
+  echo "  -h, --help       Display this help information."
+  echo "  -s, --sort       Sort the SHAs by commit date in ascending order."
+  echo "  -r, --reverse    Reverse the sort order of the SHAs." 
+  exit 1
+}
 
-  echo $DATE
+# Initialize variables
+SORT=false
+REVERSE=false
+
+# Parse options
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -h|--help)
+      usage
+      ;;
+    -s|--sort)
+      SORT=true
+      ;;
+    -r|--reverse)
+      REVERSE=true
+      ;;
+    *)
+      echo "Unknown option: $1"
+      usage
+      ;;
+  esac
+  shift
 done
+
+# Count total number of commits
+N=$(git rev-list --count --all)
+echo -e "\e[1;32mTotal commits processed:\e[0m $N"
+
+# Collect SHA and dates
+COMMITS=()
+while IFS= read -r SHA; do
+  DATE=$(git show --no-patch --format=%ci $SHA)
+  COMMITS+=("$DATE $SHA")
+done < <(git rev-list --all)
+
+# Sort if required
+if $SORT; then
+  IFS=$'\n' COMMITS=($(sort <<< "${COMMITS[*]}"))
+fi
+
+# Reverse if required
+if $REVERSE; then
+  IFS=$'\n' COMMITS=($(tac <<< "${COMMITS[*]}"))
+fi
+
+# Display results
+for ENTRY in "${COMMITS[@]}"; do
+  DATE=$(echo "$ENTRY" | cut -d' ' -f1-3)
+  SHA=$(echo "$ENTRY" | cut -d' ' -f4)
+  echo -e "\e[1;34m$SHA\e[0m \e[1;33m$DATE\e[0m"
+done
+
+# improved with ChatGPT
