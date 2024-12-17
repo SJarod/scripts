@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# Help function
+def show_help {
+    echo "Usage: $(basename $0) [options]"
+    echo "
+Options:"
+    echo "  -h       Displays this help message and exits."
+    echo "
+This script iterates through all commits in a Git repository and:"
+    echo "  - Displays the SHA of each commit."
+    echo "  - Identifies files larger than 100 MB in each commit."
+    echo "    and displays their path along with the commit SHA."
+}
+
+# Option check
+if [[ $1 == "-h" ]]; then
+    show_help
+    exit 0
+fi
+
+# Colors for outputs
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Total commit count
+N=$(git rev-list --count --all)
+echo -e "${GREEN}Total commits processed: ${N}${NC}"
+
+# Iterating through all commits
+for SHA in $(git rev-list --all)
+do
+    echo -e "${BLUE}Processing commit: ${SHA}${NC}"
+
+    # Extracting files from the commit and checking their size
+    git diff-tree --no-commit-id --name-only -r $SHA | while read -r file
+    do
+        if [[ -f "$file" ]]; then
+            size=$(git ls-tree -r -l $SHA "$file" | awk '{print $4}')
+            if [[ $size -gt 104857600 ]]; then # 100 MB in bytes
+                echo -e "${RED}Large file found: ${file} (Commit: ${SHA})${NC}"
+            fi
+        fi
+    done
+done
+
+# improved with ChatGPT
