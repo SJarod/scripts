@@ -8,16 +8,22 @@ Options:"
     echo "  -h               Displays this help message and exits."
     echo "  -o <file>        Outputs the paths of large files to the specified file."
     echo "  -v, --verbose    Outputs additional details to the console."
+    echo "  -s, --size <size> Specifies the size threshold (in MB) for large files. Default is 100 MB."
+    echo "  -m, --max-memory-usage <percent> Specifies the maximum memory usage percentage to terminate the script. Default is 95%."
+    echo "  -k, --kill <yes|no> Specifies whether to terminate the script when max memory usage is reached. Default is yes."
     echo "
 This script iterates through all commits in a Git repository and:"
     echo "  - Displays the SHA of each commit."
-    echo "  - Identifies files larger than 100 MB in each commit."
+    echo "  - Identifies files larger than the specified size in each commit."
     echo "    and displays their path along with the commit SHA."
 }
 
 # Default values
 output_file=""
 verbose=false
+size_threshold=104857600 # Default 100 MB in bytes
+max_memory_usage=95
+kill_on_max_memory=true
 
 # Parse options
 while [[ $# -gt 0 ]]; do
@@ -32,6 +38,20 @@ while [[ $# -gt 0 ]]; do
             ;;
         -v|--verbose)
             verbose=true
+            ;;
+        -s|--size)
+            shift
+            size_threshold=$(($1 * 1048576)) # Convert MB to bytes
+            ;;
+        -m|--max-memory-usage)
+            shift
+            max_memory_usage=$1
+            ;;
+        -k|--kill)
+            shift
+            if [[ $1 == "no" ]]; then
+                kill_on_max_memory=false
+            fi
             ;;
         *)
             echo "Unknown option: $1"
@@ -62,31 +82,49 @@ echo -e "${GREEN}Total commits processed: ${N}${NC}"
 counter=0
 
 # Iterating through all commits efficiently
-while read -r SHA; do
+for SHA in $(git rev-list --all --reverse); do
     counter=$((counter + 1))
-    echo -e "${YELLOW}Processing commit: $counter/$N (${SHA})${NC}"
+
+    # Display progress with memory usage
+    mem_free=$(grep MemFree /proc/meminfo | awk '{print $2}')
+    total_mem=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    mem_percent=$((100 - (mem_free * 100 / total_mem)))
+    printf "\r${YELLOW}Processing commit: %d/%d (${SHA}) - Memory Usage: %d%%${NC}" "$counter" "$N" "$mem_percent"
+
+    # Handle memory usage exceeding the limit
+    if [[ $mem_percent -ge $max_memory_usage ]]; then
+        if $kill_on_max_memory; then
+            echo -e "\n${RED}Memory usage exceeded ${max_memory_usage}%. Terminating script.${NC}"
+            exit 1
+        else
+            echo -e "\n${RED}Memory usage exceeded ${max_memory_usage}%. Continuing without termination.${NC}"
+        fi
+    fi
 
     if $verbose; then
-        echo -e "${BLUE}Details for commit: ${SHA}${NC}"
+        echo -e "\n${BLUE}Details for commit: ${SHA}${NC}"
     fi
 
     # Extracting files from the commit and checking their size
-    git diff-tree --no-commit-id --name-only -r $SHA | while read -r file; do
-        if git ls-tree -r -l $SHA "$file" | awk '{print $4}' | grep -qE '^[0-9]+$'; then
-            size=$(git ls-tree -r -l $SHA "$file" | awk '{print $4}')
-            if [[ $size -gt 104857600 ]]; then # 100 MB in bytes
+    for file in $(git diff-tree --no-commit-id --name-only -r $SHA); do
+        if git ls-files --error-unmatch "$file" >/dev/null 2>&1; then
+            size=$(git cat-file -s "$SHA:$file" 2>/dev/null || echo "0")
+
+            if [[ $size -gt $size_threshold ]]; then
                 message="Large file found: ${file} (Commit: ${SHA})"
-                
+
                 if [[ -n $output_file ]]; then
                     echo "$message" >> "$output_file"
                 fi
-                
+
                 if $verbose; then
                     echo -e "${RED}$message${NC}"
                 fi
             fi
         fi
     done
-done < <(git rev-list --all)
+done
+
+echo -e "\n${GREEN}Script completed successfully.${NC}"
 
 # improved with ChatGPT
