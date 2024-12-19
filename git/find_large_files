@@ -11,6 +11,7 @@ Options:"
     echo "  -s, --size <size> Specifies the size threshold (in MB) for large files. Default is 100 MB."
     echo "  -m, --max-memory-usage <percent> Specifies the maximum memory usage percentage to terminate the script. Default is 95%."
     echo "  -k, --kill <yes|no> Specifies whether to terminate the script when max memory usage is reached. Default is yes."
+    echo "  -r, --resume <number> Resumes processing from the specified commit number."
     echo "
 This script iterates through all commits in a Git repository and:"
     echo "  - Displays the SHA of each commit."
@@ -24,6 +25,7 @@ verbose=false
 size_threshold=104857600 # Default 100 MB in bytes
 max_memory_usage=95
 kill_on_max_memory=true
+resume_from=0
 
 # Parse options
 while [[ $# -gt 0 ]]; do
@@ -53,6 +55,10 @@ while [[ $# -gt 0 ]]; do
                 kill_on_max_memory=false
             fi
             ;;
+        -r|--resume)
+            shift
+            resume_from=$1
+            ;;
         *)
             echo "Unknown option: $1"
             show_help
@@ -79,10 +85,12 @@ N=$(git rev-list --count --all)
 echo -e "${GREEN}Total commits processed: ${N}${NC}"
 
 # Counter for progress
-counter=0
+counter=$resume_from
 
 # Iterating through all commits efficiently
-for SHA in $(git rev-list --all --reverse); do
+commits=($(git rev-list --all --reverse))
+for ((i=resume_from; i<N; i++)); do
+    SHA=${commits[$i]}
     counter=$((counter + 1))
 
     # Display progress with memory usage
