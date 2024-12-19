@@ -58,10 +58,16 @@ fi
 N=$(git rev-list --count --all)
 echo -e "${GREEN}Total commits processed: ${N}${NC}"
 
+# Counter for progress
+counter=0
+
 # Iterating through all commits efficiently
 while read -r SHA; do
+    counter=$((counter + 1))
+    echo -e "${YELLOW}Processing commit: $counter/$N (${SHA})${NC}"
+
     if $verbose; then
-        echo -e "${BLUE}Processing commit: ${SHA}${NC}"
+        echo -e "${BLUE}Details for commit: ${SHA}${NC}"
     fi
 
     # Extracting files from the commit and checking their size
