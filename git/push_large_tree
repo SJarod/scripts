@@ -74,12 +74,27 @@ function retry_push {
     done
 }
 
+# Function to check if a commit exists on the remote
+function is_commit_pushed {
+    local sha="$1"
+    git ls-remote $REMOTE $REMOTE_BRANCH | grep -q "$sha"
+    return $?
+}
+
 # Push each commit individually
 for (( i=$N-1; i>=1; i-- )); do
     commit_num="$BRANCH~$i"
     sha=$(git log $commit_num -1 --format="%H")
-    echo -e "${BLUE}Pushing commit $sha${NC}"
 
+    if [ -z "$FORCE_PUSH" ]; then
+        echo -e "${BLUE}Checking if commit $sha is already pushed...${NC}"
+        if is_commit_pushed "$sha"; then
+            echo -e "${YELLOW}Commit $sha is already on the remote. Skipping...${NC}"
+            continue
+        fi
+    fi
+
+    echo -e "${BLUE}Pushing commit $sha${NC}"
     retry_push "git push $FORCE_PUSH $REMOTE $sha:$REMOTE_BRANCH" "$sha"
 done
 
@@ -95,4 +110,4 @@ else
     retry_push "git push $FORCE_PUSH $REMOTE $BRANCH:$REMOTE_BRANCH" "$BRANCH"
 fi
 
-# upgraded with ChatGPT
+# improved with ChatGPT
