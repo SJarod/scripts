@@ -58,17 +58,15 @@ fi
 N=$(git rev-list --count --all)
 echo -e "${GREEN}Total commits processed: ${N}${NC}"
 
-# Iterating through all commits
-for SHA in $(git rev-list --all)
-do
+# Iterating through all commits efficiently
+while read -r SHA; do
     if $verbose; then
         echo -e "${BLUE}Processing commit: ${SHA}${NC}"
     fi
 
     # Extracting files from the commit and checking their size
-    git diff-tree --no-commit-id --name-only -r $SHA | while read -r file
-    do
-        if [[ -f "$file" ]]; then
+    git diff-tree --no-commit-id --name-only -r $SHA | while read -r file; do
+        if git ls-tree -r -l $SHA "$file" | awk '{print $4}' | grep -qE '^[0-9]+$'; then
             size=$(git ls-tree -r -l $SHA "$file" | awk '{print $4}')
             if [[ $size -gt 104857600 ]]; then # 100 MB in bytes
                 message="Large file found: ${file} (Commit: ${SHA})"
@@ -83,6 +81,6 @@ do
             fi
         fi
     done
-done
+done < <(git rev-list --all)
 
 # improved with ChatGPT
