@@ -2,7 +2,7 @@
 
 # Script to push every commit from a branch to a remote branch individually.
 # Usage:
-#   ./script.sh [-f] [-h] <remote> <branch> <remote_branch>
+#   ./script.sh [-f] [-h] [--dump] [-v|--verbose] <remote> <branch> <remote_branch>
 
 # Colors for output
 RED='\033[0;31m'
@@ -19,30 +19,41 @@ function show_help {
     echo -e "to a specified remote branch, one by one.${NC}"
     echo
     echo -e "${GREEN}Options:${NC}"
-    echo -e "  -f    Use 'git push -f' to force push commits."
-    echo -e "  -h    Show this help message."
+    echo -e "  -f         Use 'git push -f' to force push commits."
+    echo -e "  --dump     Enable debug outputs."
+    echo -e "  -v, --verbose Enable general output."
+    echo -e "  -h         Show this help message."
     exit 0
 }
 
 # Default values
 FORCE_PUSH=""
+VERBOSE=false
+DUMP=false
 
 # Parse options
-while getopts ":fh" opt; do
-    case $opt in
-        f)
+while [[ "$1" == -* ]]; do
+    case "$1" in
+        -f)
             FORCE_PUSH="-f"
             ;;
-        h)
+        --dump)
+            DUMP=true
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            ;;
+        -h)
             show_help
             ;;
-        ?)
-            echo -e "${RED}Invalid option: -$OPTARG${NC}" >&2
+        ?*)
+            echo -e "${RED}Invalid option: $1${NC}" >&2
             show_help
             ;;
     esac
+    shift
+
 done
-shift $((OPTIND - 1))
 
 # Validate arguments
 if [ "$#" -ne 3 ]; then
@@ -63,12 +74,12 @@ function retry_push {
     local commit_sha="$2"
 
     while true; do
-        eval "$push_command"
+        eval "$push_command" &> /dev/null
         if [ $? -eq 0 ]; then
-            echo -e "${GREEN}Successfully pushed commit $commit_sha${NC}"
+            $VERBOSE && echo -e "${GREEN}Successfully pushed commit $commit_sha${NC}"
             break
         else
-            echo -e "${YELLOW}Retrying push for commit $commit_sha...${NC}"
+            $VERBOSE && echo -e "${YELLOW}Retrying push for commit $commit_sha...${NC}"
             sleep 2
         fi
     done
@@ -77,8 +88,15 @@ function retry_push {
 # Function to check if a commit exists on the remote
 function is_commit_pushed {
     local sha="$1"
-    git ls-remote $REMOTE $REMOTE_BRANCH | grep -q "$sha"
-    return $?
+    $DUMP && echo -e "${BLUE}Checking if commit $sha exists on remote using 'git branch -r --contains'...${NC}"
+    git branch -r --contains "$sha" | grep -q "$REMOTE/$REMOTE_BRANCH"
+    local result=$?
+    if [ $result -eq 0 ]; then
+        $VERBOSE && echo -e "${GREEN}Commit $sha exists on remote.${NC}"
+    else
+        $VERBOSE && echo -e "${RED}Commit $sha does not exist on remote.${NC}"
+    fi
+    return $result
 }
 
 # Push each commit individually
@@ -87,26 +105,43 @@ for (( i=$N-1; i>=1; i-- )); do
     sha=$(git log $commit_num -1 --format="%H")
 
     if [ -z "$FORCE_PUSH" ]; then
-        echo -e "${BLUE}Checking if commit $sha is already pushed...${NC}"
+        $VERBOSE && echo -e "${BLUE}Checking if commit $sha is already pushed...${NC}"
         if is_commit_pushed "$sha"; then
-            echo -e "${YELLOW}Commit $sha is already on the remote. Skipping...${NC}"
+            $VERBOSE && echo -e "${YELLOW}Commit $sha is already on the remote. Skipping...${NC}"
             continue
         fi
     fi
 
-    echo -e "${BLUE}Pushing commit $sha${NC}"
+    if ! $VERBOSE; then
+        echo -ne "\r${YELLOW}Progress: $((N-i))/$N commits processed${NC}"
+    fi
+
+    $VERBOSE && echo -e "${BLUE}Pushing commit $sha${NC}"
     retry_push "git push $FORCE_PUSH $REMOTE $sha:$REMOTE_BRANCH" "$sha"
 done
 
 # Push the last commit (branch tip)
-echo -e "${BLUE}Pushing the last commit of $BRANCH${NC}"
+if [ -z "$FORCE_PUSH" ]; then
+    $VERBOSE && echo -e "${BLUE}Checking if the latest commit of $BRANCH is already pushed...${NC}"
+    latest_sha=$(git log $BRANCH -1 --format="%H")
+    if is_commit_pushed "$latest_sha"; then
+        $VERBOSE && echo -e "${YELLOW}The latest commit $latest_sha is already on the remote. Skipping...${NC}"
+        exit 0
+    fi
+fi
+
+if ! $VERBOSE; then
+    echo -ne "\r${YELLOW}Progress: $N/$N commits processed${NC}\n"
+fi
+
+$VERBOSE && echo -e "${BLUE}Pushing the last commit of $BRANCH${NC}"
 retry_push "git push $FORCE_PUSH $REMOTE $BRANCH:$REMOTE_BRANCH" "$BRANCH"
 
 # Ensure the last push was successful
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}All commits pushed successfully.${NC}"
+    $VERBOSE && echo -e "${GREEN}All commits pushed successfully.${NC}"
 else
-    echo -e "${RED}Error: Failed to push the last commit. Retrying...${NC}"
+    $VERBOSE && echo -e "${RED}Error: Failed to push the last commit. Retrying...${NC}"
     retry_push "git push $FORCE_PUSH $REMOTE $BRANCH:$REMOTE_BRANCH" "$BRANCH"
 fi
 
