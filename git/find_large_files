@@ -115,19 +115,17 @@ for ((i=resume_from; i<N; i++)); do
 
     # Extracting files from the commit and checking their size
     for file in $(git diff-tree --no-commit-id --name-only -r $SHA); do
-        if git ls-files --error-unmatch "$file" >/dev/null 2>&1; then
-            size=$(git cat-file -s "$SHA:$file" 2>/dev/null || echo "0")
+        size=$(git cat-file -s "$SHA:$file" 2>/dev/null || echo "0")
 
-            if [[ $size -gt $size_threshold ]]; then
-                message="Large file found: ${file} (Commit: ${SHA})"
+        if [[ $size -gt $size_threshold ]]; then
+            message="Large file found: ${file} (Commit: ${SHA})"
 
-                if [[ -n $output_file ]]; then
-                    echo "$message" >> "$output_file"
-                fi
+            if [[ -n $output_file ]]; then
+                echo "$message" >> "$output_file"
+            fi
 
-                if $verbose; then
-                    echo -e "${RED}$message${NC}"
-                fi
+            if $verbose; then
+                echo -e "${RED}$message${NC}"
             fi
         fi
     done
