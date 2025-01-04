@@ -1,39 +1,97 @@
-# migrate export all lfs files to git files
-# uninstall lfs
+#!/bin/bash
 
+# This script migrates all Git LFS (Large File Storage) files to normal Git files,
+# uninstalls Git LFS, and removes the .gitattributes file from the Git history
+# using filter-repo. It is designed to completely uninstall Git LFS from a repository.
+
+# Usage:
+#   ./script.sh [-h] [-v | --verbose]
+#
+# Options:
+#   -h                Display this help and exit.
+#   -v, --verbose     Enable verbose output. By default, only progress and memory usage
+#                     are displayed.
+
+# Functions to control verbose mode
+VERBOSE=false
+log() {
+    if [ "$VERBOSE" = true ]; then
+        echo "$1"
+    fi
+}
+
+# Display help function
+show_help() {
+    grep '^#' "$0" | cut -c 3-
+    exit 0
+}
+
+# Parse command-line arguments
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        -h)
+            show_help
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+# Suppress console output unless verbose mode is enabled
+if [ "$VERBOSE" != true ]; then
+    exec 3>&1 4>&2
+    exec 1>/dev/null 2>/dev/null
+fi
+
+# Fetch all LFS files and list them into a variable
 FILES=$(git lfs ls-files --all -n)
 git lfs fetch --all
+log "Fetched all LFS files."
 
+# Loop to migrate all LFS files to normal Git files
+while true; do
+    for f in $FILES; do
+        FILENAME="$f"
+        log "Processing file: $FILENAME"
 
-# loop while not all LFS files have been exported
-while true
-do
+        # Checkout the LFS file
+        git lfs checkout "$FILENAME"
 
-    for f in $FILES
-    do
-        FILENAME='"'$f'"'
-        echo $FILENAME
-        git lfs checkout $FILENAME
-        git lfs migrate export --include=$FILENAME --yes
+        # Migrate the LFS file to a normal Git file
+        git lfs migrate export --include="$FILENAME" --yes
     done
 
-    # check if there are LFS files remaining
+    # Check if there are LFS files remaining
     RESULT=$(git lfs migrate info | grep "LFS")
-    if [ -z "$RESULT" ]
-    then
-        # success
-        echo "All files have been exported"
+    if [ -z "$RESULT" ]; then
+        log "All files have been exported successfully."
         break
     else
-        # failure
-        echo "Trying again"
+        log "LFS files still remaining. Retrying..."
     fi
 
 done
 
-
+# Uninstall Git LFS
 git lfs uninstall
+log "Git LFS uninstalled."
 
+# Use filter-repo to remove the .gitattributes file from history
 git filter-repo --force --invert-paths --path ".gitattributes"
+log "Removed .gitattributes from the repository history."
 
+# Restore console output if it was suppressed
+if [ "$VERBOSE" != true ]; then
+    exec 1>&3 2>&4
+    exec 3>&- 4>&-
+fi
 
+echo "Git LFS has been successfully uninstalled."
+
+# improved with ChatGPT
