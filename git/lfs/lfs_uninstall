@@ -6,7 +6,7 @@ git lfs fetch --all
 
 
 # loop while not all LFS files have been exported
-for (( ; ; ))
+while true
 do
 
     for f in $FILES
