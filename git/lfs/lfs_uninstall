@@ -5,18 +5,30 @@
 # using filter-repo. It is designed to completely uninstall Git LFS from a repository.
 
 # Usage:
-#   ./script.sh [-h] [-v | --verbose]
+#   ./script.sh [-h] [-v | --verbose] [-k | --kill] [-m | --max-memory-usage <percentage>]
 #
 # Options:
 #   -h                Display this help and exit.
 #   -v, --verbose     Enable verbose output. By default, only progress and memory usage
 #                     are displayed.
+#   -k, --kill        Stop the script if memory usage exceeds the maximum percentage (default: 95%).
+#   -m, --max-memory-usage <percentage>
+#                     Set the maximum memory usage percentage threshold for the --kill option.
+
+# Define colors for output
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+YELLOW="\033[0;33m"
+BLUE="\033[0;34m"
+NC="\033[0m" # No Color
 
 # Functions to control verbose mode
 VERBOSE=false
+KILL=false
+MAX_MEMORY_USAGE=95
 log() {
     if [ "$VERBOSE" = true ]; then
-        echo "$1"
+        echo -e "$1"
     fi
 }
 
@@ -24,6 +36,19 @@ log() {
 show_help() {
     grep '^#' "$0" | cut -c 3-
     exit 0
+}
+
+# Function to check memory usage
+check_memory_usage() {
+    mem_free=$(grep MemFree /proc/meminfo | awk '{print $2}')
+    total_mem=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    mem_percent=$((100 - (mem_free * 100 / total_mem)))
+    echo -en "\r${YELLOW}Memory Usage: ${mem_percent}%${NC}"
+
+    if [ "$KILL" = true ] && [ "$mem_percent" -ge "$MAX_MEMORY_USAGE" ]; then
+        echo -e "\n${RED}Memory usage exceeded $MAX_MEMORY_USAGE%. Stopping script.${NC}"
+        exit 1
+    fi
 }
 
 # Parse command-line arguments
@@ -35,8 +60,15 @@ while [[ "$#" -gt 0 ]]; do
         -v|--verbose)
             VERBOSE=true
             ;;
+        -k|--kill)
+            KILL=true
+            ;;
+        -m|--max-memory-usage)
+            shift
+            MAX_MEMORY_USAGE=$1
+            ;;
         *)
-            echo "Unknown option: $1"
+            echo -e "${RED}Unknown option: $1${NC}"
             exit 1
             ;;
     esac
@@ -52,39 +84,51 @@ fi
 # Fetch all LFS files and list them into a variable
 FILES=$(git lfs ls-files --all -n)
 git lfs fetch --all
-log "Fetched all LFS files."
+log "${BLUE}Fetched all LFS files.${NC}"
 
 # Loop to migrate all LFS files to normal Git files
 while true; do
     for f in $FILES; do
         FILENAME="$f"
-        log "Processing file: $FILENAME"
+        log "${BLUE}Processing file: $FILENAME${NC}"
 
-        # Checkout the LFS file
-        git lfs checkout "$FILENAME"
+        # Checkout the LFS file (ensure it's checked out successfully)
+        if ! git lfs checkout "$FILENAME"; then
+            echo -e "${RED}Error checking out file: $FILENAME. Skipping...${NC}"
+            continue
+        fi
 
-        # Migrate the LFS file to a normal Git file
-        git lfs migrate export --include="$FILENAME" --yes
+        # Migrate the LFS file to a normal Git file (retry if unsuccessful)
+        while true; do
+            if git lfs migrate export --include="$FILENAME" --yes; then
+                break
+            else
+                echo -e "${YELLOW}Retrying export for file: $FILENAME...${NC}"
+            fi
+        done
+
+        # Display memory usage and check threshold
+        check_memory_usage
     done
 
     # Check if there are LFS files remaining
     RESULT=$(git lfs migrate info | grep "LFS")
     if [ -z "$RESULT" ]; then
-        log "All files have been exported successfully."
+        log "${GREEN}All files have been exported successfully.${NC}"
         break
     else
-        log "LFS files still remaining. Retrying..."
+        log "${YELLOW}LFS files still remaining. Retrying...${NC}"
     fi
 
 done
 
 # Uninstall Git LFS
 git lfs uninstall
-log "Git LFS uninstalled."
+log "${GREEN}Git LFS uninstalled.${NC}"
 
 # Use filter-repo to remove the .gitattributes file from history
 git filter-repo --force --invert-paths --path ".gitattributes"
-log "Removed .gitattributes from the repository history."
+log "${GREEN}Removed .gitattributes from the repository history.${NC}"
 
 # Restore console output if it was suppressed
 if [ "$VERBOSE" != true ]; then
@@ -92,6 +136,6 @@ if [ "$VERBOSE" != true ]; then
     exec 3>&- 4>&-
 fi
 
-echo "Git LFS has been successfully uninstalled."
+echo -e "${GREEN}Git LFS has been successfully uninstalled.${NC}"
 
 # improved with ChatGPT
