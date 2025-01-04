@@ -3,39 +3,23 @@
 # Description:
 # This script clones a Git repository, migrates Git LFS files to regular Git files,
 # uninstalls Git LFS, and removes Unreal Engine and IDE-related files from the Git history.
-# The script uses 'git-filter-repo' to purge the history of unwanted files.
-#
-# Features:
-# - Clones the repository into a specified directory.
-# - Replaces Git LFS files with regular Git files.
-# - Removes Unreal Engine specific files from Git history.
-# - Removes IDE-related files (e.g., .vs, .idea, etc.) from Git history.
-# - Option to specify the repository URL and destination directory.
+# Additionally, it can monitor memory usage and terminate if usage exceeds a specified threshold.
 #
 # Usage:
-# ./clone+clean.sh -r <repository-url> -d <destination-directory>
+# ./clone+clean.sh -r <repository-url> -d <destination-directory> [-m <max-memory-usage>] [-k]
 #
 # Options:
 # -r  Repository URL (required)
-#     Example: -r https://github.com/username/repo.git
 # -d  Destination directory (required)
-#     Example: -d my-folder
+# -m  Maximum memory usage percentage (default: 95)
+# -k  Enable memory usage monitoring and terminate if limit is reached
 # -h  Show this help message
-#     Example: -h or --help
-#
-# Legacy version (Original functionality):
-# This script was initially written to perform the same tasks but without options or clear documentation.
-# Version: 1.0 (Legacy)
-#
-# Example:
-# To clone a repository and clean it:
-# ./clone+clean.sh -r https://url.com -d folder
-#
-# Version: 2.0
 
-# Default values for repository URL and directory
+# Default values for options
 REPO=""
 DIR=""
+MAX_MEMORY_USAGE=95
+ENABLE_KILL=false
 
 # Function to display help message
 display_help() {
@@ -44,18 +28,37 @@ display_help() {
     echo "Description:"
     echo "This script clones a Git repository, migrates Git LFS files to regular Git files,"
     echo "uninstalls Git LFS, and removes Unreal Engine and IDE-related files from the Git history."
+    echo "Additionally, it monitors memory usage and can terminate if usage exceeds a specified threshold."
     echo ""
     echo "Options:"
     echo "  -r <repository-url>     Repository URL to clone (required)"
     echo "  -d <destination-dir>     Directory to clone the repository into (required)"
+    echo "  -m <max-memory-usage>    Maximum memory usage percentage (default: 95)"
+    echo "  -k                       Enable memory usage monitoring and terminate if limit is reached"
     echo "  -h, --help               Show this help message"
     echo ""
     echo "Example:"
-    echo "  ./clone+clean.sh -r https://github.com/username/repo.git -d my-folder"
-    echo ""
-    echo "Legacy version (Original functionality):"
-    echo "  Version: 1.0"
+    echo "  ./clone+clean.sh -r https://github.com/username/repo.git -d my-folder -m 90 -k"
     exit 0
+}
+
+# Function to check memory usage and terminate if usage exceeds the threshold
+check_memory_usage() {
+    local mem_total mem_available mem_used mem_usage_percentage
+
+    # Read memory info from /proc/meminfo
+    mem_total=$(grep "^MemTotal:" /proc/meminfo | awk '{print $2}')
+    mem_available=$(grep "^MemAvailable:" /proc/meminfo | awk '{print $2}')
+
+    # Calculate used memory and usage percentage
+    mem_used=$((mem_total - mem_available))
+    mem_usage_percentage=$((mem_used * 100 / mem_total))
+
+    # Check if memory usage exceeds the limit
+    if [ "$mem_usage_percentage" -ge "$MAX_MEMORY_USAGE" ]; then
+        echo "Error: Memory usage has reached $mem_usage_percentage%, exceeding the limit of $MAX_MEMORY_USAGE%. Terminating script."
+        exit 1
+    fi
 }
 
 # Check for --help or -h option
@@ -63,8 +66,8 @@ if [[ "$1" == "--help" || "$1" == "-h" ]]; then
     display_help
 fi
 
-# Parse command line arguments for repository URL (-r) and directory (-d)
-while getopts "r:d:" opt; do
+# Parse command line arguments
+while getopts "r:d:m:k" opt; do
   case $opt in
     r)
       REPO=$OPTARG
@@ -72,8 +75,14 @@ while getopts "r:d:" opt; do
     d)
       DIR=$OPTARG
       ;;
+    m)
+      MAX_MEMORY_USAGE=$OPTARG
+      ;;
+    k)
+      ENABLE_KILL=true
+      ;;
     *)
-      echo "Usage: $0 -r <repository-url> -d <destination-directory>"
+      echo "Usage: $0 -r <repository-url> -d <destination-directory> [-m <max-memory-usage>] [-k]"
       exit 1
       ;;
   esac
@@ -82,29 +91,41 @@ done
 # Check if both repository URL and directory are provided
 if [ -z "$REPO" ] || [ -z "$DIR" ]; then
   echo "Error: Both repository URL and destination directory must be specified."
-  echo "Usage: $0 -r <repository-url> -d <destination-directory>"
+  echo "Usage: $0 -r <repository-url> -d <destination-directory> [-m <max-memory-usage>] [-k]"
   exit 1
 fi
 
 # Fetch external scripts for LFS uninstallation and file obliteration
-LFS_UNINSTALL=$(curl https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/lfs_uninstall)
-OBLITERATE=$(curl https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/obliterate)
+LFS_UNINSTALL=$(curl -s https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/lfs_uninstall)
+OBLITERATE=$(curl -s https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/obliterate)
 
 # Clone the repository into the specified directory
+if $ENABLE_KILL; then
+    check_memory_usage
+fi
 git clone "$REPO" "$DIR"
 
 # Navigate into the cloned directory
 cd "$DIR" || exit
 
 # Execute the LFS uninstallation script to replace LFS files with regular Git files
+if $ENABLE_KILL; then
+    check_memory_usage
+fi
 eval "$LFS_UNINSTALL"
 
 # Execute the obliterate script to remove Unreal Engine files from Git history
+if $ENABLE_KILL; then
+    check_memory_usage
+fi
 eval "$OBLITERATE StarterContent"
 eval "$OBLITERATE Intermediate"
 eval "$OBLITERATE Saved"
 
 # Execute the obliterate script to remove IDE-related files from Git history
+if $ENABLE_KILL; then
+    check_memory_usage
+fi
 eval "$OBLITERATE .vs"
 eval "$OBLITERATE .vsconfig"
 eval "$OBLITERATE .idea"
@@ -112,4 +133,4 @@ eval "$OBLITERATE .idea"
 # Completion message
 echo "Repository cloned and cleaned successfully."
 
-# improved by ChatGPT
+# improved with ChatGPT
