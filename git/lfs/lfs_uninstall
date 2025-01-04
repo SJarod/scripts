@@ -22,7 +22,7 @@ do
     if [ -z "$RESULT" ]
     then
         # success
-        echo "All files have been exported
+        echo "All files have been exported"
         break
     else
         # failure
