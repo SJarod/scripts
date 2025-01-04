@@ -6,13 +6,14 @@
 # Additionally, it can monitor memory usage and terminate if usage exceeds a specified threshold.
 #
 # Usage:
-# ./clone+clean.sh -r <repository-url> -d <destination-directory> [-m <max-memory-usage>] [-k]
+# ./clone+clean.sh -r <repository-url> -d <destination-directory> [-m <max-memory-usage>] [-k] [-v]
 #
 # Options:
 # -r  Repository URL (required)
 # -d  Destination directory (required)
 # -m  Maximum memory usage percentage (default: 95)
 # -k  Enable memory usage monitoring and terminate if limit is reached
+# -v  Enable verbose output
 # -h  Show this help message
 
 # Default values for options
@@ -20,43 +21,65 @@ REPO=""
 DIR=""
 MAX_MEMORY_USAGE=95
 ENABLE_KILL=false
+VERBOSE=false
+
+# Colors for output
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+YELLOW="\033[0;33m"
+BLUE="\033[0;34m"
+NC="\033[0m" # No color
 
 # Function to display help message
 display_help() {
-    echo "Usage: $0 -r <repository-url> -d <destination-directory> [options]"
+    echo -e "${GREEN}Usage:${NC} $0 -r <repository-url> -d <destination-directory> [options]"
     echo ""
-    echo "Description:"
+    echo -e "${BLUE}Description:${NC}"
     echo "This script clones a Git repository, migrates Git LFS files to regular Git files,"
     echo "uninstalls Git LFS, and removes Unreal Engine and IDE-related files from the Git history."
     echo "Additionally, it monitors memory usage and can terminate if usage exceeds a specified threshold."
     echo ""
-    echo "Options:"
+    echo -e "${YELLOW}Options:${NC}"
     echo "  -r <repository-url>     Repository URL to clone (required)"
     echo "  -d <destination-dir>     Directory to clone the repository into (required)"
     echo "  -m <max-memory-usage>    Maximum memory usage percentage (default: 95)"
     echo "  -k                       Enable memory usage monitoring and terminate if limit is reached"
+    echo "  -v                       Enable verbose output"
     echo "  -h, --help               Show this help message"
     echo ""
-    echo "Example:"
-    echo "  ./clone+clean.sh -r https://github.com/username/repo.git -d my-folder -m 90 -k"
+    echo -e "${GREEN}Example:${NC}"
+    echo "  ./clone+clean.sh -r https://github.com/username/repo.git -d my-folder -m 90 -k -v"
     exit 0
+}
+
+# Function to print verbose messages
+log() {
+    if $VERBOSE; then
+        echo -e "$1"
+    fi
 }
 
 # Function to check memory usage and terminate if usage exceeds the threshold
 check_memory_usage() {
-    local mem_total mem_available mem_used mem_usage_percentage
+    local mem_total mem_free mem_used mem_usage_percentage mem_available
 
     # Read memory info from /proc/meminfo
     mem_total=$(grep "^MemTotal:" /proc/meminfo | awk '{print $2}')
-    mem_available=$(grep "^MemAvailable:" /proc/meminfo | awk '{print $2}')
+    mem_free=$(grep "^MemFree:" /proc/meminfo | awk '{print $2}')
 
+    # Calculate available memory (MemAvailable = MemFree + Buffers + Cached)
+    mem_available=$(grep "^MemAvailable:" /proc/meminfo | awk '{print $2}')
+    
     # Calculate used memory and usage percentage
     mem_used=$((mem_total - mem_available))
     mem_usage_percentage=$((mem_used * 100 / mem_total))
 
+    # Print memory usage continuously
+    echo -e "Memory Usage: $mem_usage_percentage%"
+
     # Check if memory usage exceeds the limit
     if [ "$mem_usage_percentage" -ge "$MAX_MEMORY_USAGE" ]; then
-        echo "Error: Memory usage has reached $mem_usage_percentage%, exceeding the limit of $MAX_MEMORY_USAGE%. Terminating script."
+        echo -e "${RED}Error: Memory usage has reached $mem_usage_percentage%, exceeding the limit of $MAX_MEMORY_USAGE%. Terminating script.${NC}"
         exit 1
     fi
 }
@@ -67,7 +90,7 @@ if [[ "$1" == "--help" || "$1" == "-h" ]]; then
 fi
 
 # Parse command line arguments
-while getopts "r:d:m:k" opt; do
+while getopts "r:d:m:kv" opt; do
   case $opt in
     r)
       REPO=$OPTARG
@@ -81,8 +104,11 @@ while getopts "r:d:m:k" opt; do
     k)
       ENABLE_KILL=true
       ;;
+    v)
+      VERBOSE=true
+      ;;
     *)
-      echo "Usage: $0 -r <repository-url> -d <destination-directory> [-m <max-memory-usage>] [-k]"
+      echo -e "${RED}Usage: $0 -r <repository-url> -d <destination-directory> [-m <max-memory-usage>] [-k] [-v]${NC}"
       exit 1
       ;;
   esac
@@ -90,19 +116,21 @@ done
 
 # Check if both repository URL and directory are provided
 if [ -z "$REPO" ] || [ -z "$DIR" ]; then
-  echo "Error: Both repository URL and destination directory must be specified."
-  echo "Usage: $0 -r <repository-url> -d <destination-directory> [-m <max-memory-usage>] [-k]"
+  echo -e "${RED}Error: Both repository URL and destination directory must be specified.${NC}"
+  echo -e "${YELLOW}Usage:${NC} $0 -r <repository-url> -d <destination-directory> [-m <max-memory-usage>] [-k] [-v]"
   exit 1
 fi
 
 # Fetch external scripts for LFS uninstallation and file obliteration
-LFS_UNINSTALL=$(curl -s https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/lfs_uninstall)
-OBLITERATE=$(curl -s https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/obliterate)
+log "${BLUE}Fetching external scripts...${NC}"
+LFS_UNINSTALL=$(curl -s https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/git/lfs/lfs_uninstall)
+OBLITERATE=$(curl -s https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/git/obliterate)
 
 # Clone the repository into the specified directory
 if $ENABLE_KILL; then
     check_memory_usage
 fi
+log "${BLUE}Cloning repository into $DIR...${NC}"
 git clone "$REPO" "$DIR"
 
 # Navigate into the cloned directory
@@ -112,12 +140,14 @@ cd "$DIR" || exit
 if $ENABLE_KILL; then
     check_memory_usage
 fi
+log "${BLUE}Executing LFS uninstallation script...${NC}"
 eval "$LFS_UNINSTALL"
 
 # Execute the obliterate script to remove Unreal Engine files from Git history
 if $ENABLE_KILL; then
     check_memory_usage
 fi
+log "${BLUE}Removing Unreal Engine files from Git history...${NC}"
 eval "$OBLITERATE StarterContent"
 eval "$OBLITERATE Intermediate"
 eval "$OBLITERATE Saved"
@@ -126,11 +156,12 @@ eval "$OBLITERATE Saved"
 if $ENABLE_KILL; then
     check_memory_usage
 fi
+log "${BLUE}Removing IDE-related files from Git history...${NC}"
 eval "$OBLITERATE .vs"
 eval "$OBLITERATE .vsconfig"
 eval "$OBLITERATE .idea"
 
 # Completion message
-echo "Repository cloned and cleaned successfully."
+echo -e "${GREEN}Repository cloned and cleaned successfully.${NC}"
 
 # improved with ChatGPT
