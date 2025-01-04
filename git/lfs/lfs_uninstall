@@ -14,7 +14,7 @@ do
         FILENAME='"'$f'"'
         echo $FILENAME
         git lfs checkout $FILENAME
-        git lfs migrate export --include=$FILENAME
+        git lfs migrate export --include=$FILENAME --yes
     done
 
     # check if there are LFS files remaining
