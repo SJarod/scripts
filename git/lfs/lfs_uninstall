@@ -81,39 +81,36 @@ if [ "$VERBOSE" != true ]; then
     exec 1>/dev/null 2>/dev/null
 fi
 
-# Fetch all LFS files and list them into a variable
-FILES=$(git lfs ls-files --all -n)
-git lfs fetch --all
-log "${BLUE}Fetched all LFS files.${NC}"
+# Extract LFS tracked file types from .gitattributes
+TYPES=$(grep filter=lfs .gitattributes | awk '{print $1}' | sed 's/\*//g')
+log "${BLUE}Tracked LFS file types: ${TYPES}${NC}"
 
 # Loop to migrate all LFS files to normal Git files
 while true; do
-    for f in $FILES; do
-        FILENAME="$f"
-        log "${BLUE}Processing file: $FILENAME${NC}"
+    # Check memory usage at the beginning of each loop
+    check_memory_usage
 
-        # Checkout the LFS file (ensure it's checked out successfully)
-        if ! git lfs checkout "$FILENAME"; then
-            echo -e "${RED}Error checking out file: $FILENAME. Skipping...${NC}"
+    # Fetch and checkout all LFS files
+    git lfs fetch --all
+    git lfs ls-files --all -n | while read -r file; do
+        if ! git lfs checkout "$file"; then
+            echo -e "${RED}Error checking out file: $file. Retrying...${NC}"
             continue
         fi
+    done
 
-        # Migrate the LFS file to a normal Git file (retry if unsuccessful)
-        while true; do
-            if git lfs migrate export --include="$FILENAME" --yes; then
-                break
-            else
-                echo -e "${YELLOW}Retrying export for file: $FILENAME...${NC}"
-            fi
-        done
-
-        # Display memory usage and check threshold
-        check_memory_usage
+    # Export all LFS files of the tracked types
+    for type in $TYPES; do
+        log "${BLUE}Exporting files of type: *${type}${NC}"
+        if ! git lfs migrate export --include="*.${type}" --yes --everything --verbose; then
+            echo -e "${YELLOW}Retrying export for type: *${type}...${NC}"
+        fi
     done
 
     # Check if there are LFS files remaining
     RESULT=$(git lfs migrate info | grep "LFS")
-    if [ -z "$RESULT" ]; then
+    REMAINING_FILES=$(git lfs ls-files --all -n)
+    if [ -z "$RESULT" ] && [ -z "$REMAINING_FILES" ]; then
         log "${GREEN}All files have been exported successfully.${NC}"
         break
     else
