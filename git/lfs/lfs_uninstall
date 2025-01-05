@@ -90,15 +90,6 @@ while true; do
     # Check memory usage at the beginning of each loop
     check_memory_usage
 
-    # Fetch and checkout all LFS files
-    git lfs fetch --all
-    git lfs ls-files --all -n | while read -r file; do
-        if ! git lfs checkout "$file"; then
-            echo -e "${RED}Error checking out file: $file. Retrying...${NC}"
-            continue
-        fi
-    done
-
     # Export all LFS files of the tracked types
     for type in $TYPES; do
         log "${BLUE}Exporting files of type: *${type}${NC}"
