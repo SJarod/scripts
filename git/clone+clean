@@ -1,21 +1,5 @@
 #!/bin/bash
 
-# Description:
-# This script clones a Git repository, migrates Git LFS files to regular Git files,
-# uninstalls Git LFS, and removes Unreal Engine and IDE-related files from the Git history.
-# Additionally, it can monitor memory usage and terminate if usage exceeds a specified threshold.
-#
-# Usage:
-# ./clone+clean.sh -r <repository-url> -d <destination-directory> [-m <max-memory-usage>] [-k] [-v]
-#
-# Options:
-# -r  Repository URL (required)
-# -d  Destination directory (required)
-# -m  Maximum memory usage percentage (default: 95)
-# -k  Enable memory usage monitoring and terminate if limit is reached
-# -v  Enable verbose output
-# -h  Show this help message
-
 # Default values for options
 REPO=""
 DIR=""
@@ -36,7 +20,8 @@ display_help() {
     echo ""
     echo -e "${BLUE}Description:${NC}"
     echo "This script clones a Git repository, migrates Git LFS files to regular Git files,"
-    echo "uninstalls Git LFS, and removes Unreal Engine and IDE-related files from the Git history."
+    echo "uninstalls Git LFS, removes Unreal Engine and IDE-related files from the Git history,"
+    echo "identifies large files, renames them, and optionally moves them to a new branch."
     echo "Additionally, it monitors memory usage and can terminate if usage exceeds a specified threshold."
     echo ""
     echo -e "${YELLOW}Options:${NC}"
@@ -59,26 +44,82 @@ log() {
     fi
 }
 
-# Function to check memory usage and terminate if usage exceeds the threshold
-check_memory_usage() {
-    local mem_total mem_free mem_used mem_usage_percentage
+# Function to clone the Git repository
+clone_repo() {
+    log "${BLUE}Cloning repository into $DIR...${NC}"
+    git clone "$REPO" "$DIR"
+    cd "$DIR" || exit
+}
 
-    # Read memory info from /proc/meminfo
-    mem_total=$(grep "^MemTotal:" /proc/meminfo | awk '{print $2}')
-    mem_free=$(grep "^MemFree:" /proc/meminfo | awk '{print $2}')
+# Function to uninstall Git LFS
+uninstall_lfs() {
+    log "${BLUE}Downloading LFS uninstallation script...${NC}"
+    curl -o lfs_uninstall.sh https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/git/lfs/lfs_uninstall
 
-    # Calculate used memory and usage percentage using MemFree
-    mem_used=$((mem_total - mem_free))
-    mem_usage_percentage=$((mem_used * 100 / mem_total))
+    log "${BLUE}Executing LFS uninstallation script...${NC}"
+    bash lfs_uninstall.sh -k -v -m "$MAX_MEMORY_USAGE"
+    
+    # Remove the downloaded LFS uninstallation script
+    rm -f lfs_uninstall.sh
+}
 
-    # Print memory usage continuously
-    echo -e "Memory Usage: $mem_usage_percentage%"
+# Function to obliterate unnecessary files (Unreal Engine and IDE-related)
+obliterate_files() {
+    log "${BLUE}Downloading obliterate script...${NC}"
+    curl -o obliterate.sh https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/git/obliterate
 
-    # Check if memory usage exceeds the limit
-    if [ "$mem_usage_percentage" -ge "$MAX_MEMORY_USAGE" ]; then
-        echo -e "${RED}Error: Memory usage has reached $mem_usage_percentage%, exceeding the limit of $MAX_MEMORY_USAGE%. Terminating script.${NC}"
-        exit 1
+    log "${BLUE}Removing Unreal Engine files from Git history...${NC}"
+    bash obliterate.sh StarterContent
+    bash obliterate.sh Intermediate
+    bash obliterate.sh Saved
+
+    # Remove IDE-related files
+    log "${BLUE}Removing IDE-related files from Git history...${NC}"
+    bash obliterate.sh .vs
+    bash obliterate.sh .vsconfig
+    bash obliterate.sh .idea
+
+    # Remove the downloaded obliterate script
+    rm -f obliterate.sh
+}
+
+# Function to find large files in the repository
+find_large_files() {
+    log "${BLUE}Downloading find_large_files script...${NC}"
+    curl -o find_large_files.sh https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/git/find_large_files
+
+    log "${BLUE}Identifying large files in the repository...${NC}"
+    chmod +x find_large_files.sh
+    ./find_large_files.sh -o large_files -s 100 -m "$MAX_MEMORY_USAGE" -k
+
+    # Initialize a flag to track whether large files were found
+    LARGE_FILES_FOUND=false
+
+    log "${BLUE}Renaming large files in the repository history...${NC}"
+    mkdir -p HeavyContent
+    while IFS= read -r line; do
+      if [[ $line =~ Large\ file\ found:\ (.+)\ \(Commit:\ ]]; then
+        filepath="${BASH_REMATCH[1]}"
+        LARGE_FILES_FOUND=true
+        git filter-repo --path-rename "$filepath":HeavyContent/"$filepath"
+      fi
+    done < large_files
+
+    # If large files were found, return true
+    if $LARGE_FILES_FOUND; then
+        return 0
+    else
+        return 1
     fi
+
+    # Remove the find_large_files script and temporary files
+    rm -f find_large_files.sh large_files
+}
+
+# Function to move large files folder to another branch
+move_large_files_to_branch() {
+    log "${BLUE}Creating a new branch 'heavy-content' with the HeavyContent folder...${NC}"
+    git subtree split --prefix=HeavyContent -b heavy-content
 }
 
 # Check for --help or -h option
@@ -111,63 +152,21 @@ while getopts "r:d:m:kv" opt; do
   esac
 done
 
-# Check if both repository URL and directory are provided
+# Ensure both repository URL and directory are provided
 if [ -z "$REPO" ] || [ -z "$DIR" ]; then
   echo -e "${RED}Error: Both repository URL and destination directory must be specified.${NC}"
   echo -e "${YELLOW}Usage:${NC} $0 -r <repository-url> -d <destination-directory> [-m <max-memory-usage>] [-k] [-v]"
   exit 1
 fi
 
-# Clone the repository into the specified directory
-if $ENABLE_KILL; then
-    check_memory_usage
-fi
-log "${BLUE}Cloning repository into $DIR...${NC}"
-git clone "$REPO" "$DIR"
-
-# Navigate into the cloned directory
-cd "$DIR" || exit
-
-# Download the LFS uninstallation script
-log "${BLUE}Downloading LFS uninstallation script...${NC}"
-curl -o lfs_uninstall.sh https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/git/lfs/lfs_uninstall
-
-# Execute the LFS uninstallation script with specified options
-if $ENABLE_KILL; then
-    check_memory_usage
-fi
-log "${BLUE}Executing LFS uninstallation script...${NC}"
-bash lfs_uninstall.sh -k -v -m "$MAX_MEMORY_USAGE"
-
-# Remove the downloaded LFS uninstallation script
-rm -f lfs_uninstall.sh
-
-# Download the obliterate script
-log "${BLUE}Downloading obliterate script...${NC}"
-curl -o obliterate.sh https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/git/obliterate
-
-# Execute the obliterate script to remove Unreal Engine files from Git history
-if $ENABLE_KILL; then
-    check_memory_usage
-fi
-log "${BLUE}Removing Unreal Engine files from Git history...${NC}"
-bash obliterate.sh StarterContent
-bash obliterate.sh Intermediate
-bash obliterate.sh Saved
-
-# Execute the obliterate script to remove IDE-related files from Git history
-if $ENABLE_KILL; then
-    check_memory_usage
-fi
-log "${BLUE}Removing IDE-related files from Git history...${NC}"
-bash obliterate.sh .vs
-bash obliterate.sh .vsconfig
-bash obliterate.sh .idea
-
-# Remove the downloaded obliterate script
-rm -f obliterate.sh
+# Execute the functions
+clone_repo
+uninstall_lfs
+obliterate_files
+find_large_files
+move_large_files_to_branch
 
 # Completion message
-echo -e "${GREEN}Repository cloned and cleaned successfully.${NC}"
+echo -e "${GREEN}Repository cloned, cleaned, and processed successfully.${NC}"
 
 # improved with ChatGPT
