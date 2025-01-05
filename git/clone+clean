@@ -25,12 +25,12 @@ display_help() {
     echo "Additionally, it monitors memory usage and can terminate if usage exceeds a specified threshold."
     echo ""
     echo -e "${YELLOW}Options:${NC}"
-    echo "  -r <repository-url>     Repository URL to clone (required)"
-    echo "  -d <destination-dir>     Directory to clone the repository into (required)"
-    echo "  -m <max-memory-usage>    Maximum memory usage percentage (default: 95)"
-    echo "  -k                       Enable memory usage monitoring and terminate if limit is reached"
-    echo "  -v                       Enable verbose output"
-    echo "  -h, --help               Show this help message"
+    echo "  -r, --repo <repository-url>     Repository URL to clone (required)"
+    echo "  -d, --destination <destination-dir>     Directory to clone the repository into (required)"
+    echo "  -m, --max-memory-usage <percentage>    Maximum memory usage percentage (default: 95)"
+    echo "  -k, --kill                       Enable memory usage monitoring and terminate if limit is reached"
+    echo "  -v, --verbose                    Enable verbose output"
+    echo "  -h, --help                       Show this help message"
     echo ""
     echo -e "${GREEN}Example:${NC}"
     echo "  ./clone+clean.sh -r https://github.com/username/repo.git -d my-folder -m 90 -k -v"
@@ -98,15 +98,15 @@ find_large_files() {
     log "${BLUE}Renaming large files in the repository history...${NC}"
     mkdir -p HeavyContent
     while IFS= read -r line; do
-      if [[ $line =~ Large\ file\ found:\ (.+)\ \(Commit:\ ]]; then
+      if [[ $line =~ Large\ file\ found:\ (.+)\ \(Commit\:.* ]]; then  # Updated regex to extract file path only
         filepath="${BASH_REMATCH[1]}"
         LARGE_FILES_FOUND=true
         git filter-repo --path-rename "$filepath":HeavyContent/"$filepath"
       fi
     done < large_files
 
-    # If large files were found, return true
-    if $LARGE_FILES_FOUND; then
+    # If large files were found, return success (0)
+    if [ "$LARGE_FILES_FOUND" = true ]; then
         return 0
     else
         return 1
@@ -122,34 +122,36 @@ move_large_files_to_branch() {
     git subtree split --prefix=HeavyContent -b heavy-content
 }
 
-# Check for --help or -h option
-if [[ "$1" == "--help" || "$1" == "-h" ]]; then
-    display_help
-fi
-
-# Parse command line arguments
-while getopts "r:d:m:kv" opt; do
-  case $opt in
-    r)
-      REPO=$OPTARG
-      ;;
-    d)
-      DIR=$OPTARG
-      ;;
-    m)
-      MAX_MEMORY_USAGE=$OPTARG
-      ;;
-    k)
-      ENABLE_KILL=true
-      ;;
-    v)
-      VERBOSE=true
-      ;;
-    *)
-      echo -e "${RED}Usage: $0 -r <repository-url> -d <destination-directory> [-m <max-memory-usage>] [-k] [-v]${NC}"
-      exit 1
-      ;;
-  esac
+# Handle both short and long options
+while [[ "$1" != "" ]]; do
+    case $1 in
+        -r | --repo)
+            shift
+            REPO=$1
+            ;;
+        -d | --destination)
+            shift
+            DIR=$1
+            ;;
+        -m | --max-memory-usage)
+            shift
+            MAX_MEMORY_USAGE=$1
+            ;;
+        -k | --kill)
+            ENABLE_KILL=true
+            ;;
+        -v | --verbose)
+            VERBOSE=true
+            ;;
+        -h | --help)
+            display_help
+            ;;
+        *)
+            echo -e "${RED}Usage: $0 -r <repository-url> -d <destination-directory> [-m <max-memory-usage>] [-k] [-v]${NC}"
+            exit 1
+            ;;
+    esac
+    shift
 done
 
 # Ensure both repository URL and directory are provided
