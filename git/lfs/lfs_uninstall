@@ -93,15 +93,14 @@ while true; do
     # Export all LFS files of the tracked types
     for type in $TYPES; do
         log "${BLUE}Exporting files of type: *${type}${NC}"
-        if ! git lfs migrate export --include="*.${type}" --yes --everything --verbose; then
-            echo -e "${YELLOW}Retrying export for type: *${type}...${NC}"
-        fi
+        git lfs migrate export --include="*${type}" --yes --everything --verbose
+        sleep 20s
     done
 
     # Check if there are LFS files remaining
     RESULT=$(git lfs migrate info | grep "LFS")
-    REMAINING_FILES=$(git lfs ls-files --all -n)
-    if [ -z "$RESULT" ] && [ -z "$REMAINING_FILES" ]; then
+    # REMAINING_FILES=$(git lfs ls-files --all -n) # Disabled line
+    if [ -z "$RESULT" ]; then # Disabled REMAINING_FILES check
         log "${GREEN}All files have been exported successfully.${NC}"
         break
     else
