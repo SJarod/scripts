@@ -118,11 +118,6 @@ if [ -z "$REPO" ] || [ -z "$DIR" ]; then
   exit 1
 fi
 
-# Fetch external scripts for LFS uninstallation and file obliteration
-log "${BLUE}Fetching external scripts...${NC}"
-LFS_UNINSTALL=$(curl -s https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/git/lfs/lfs_uninstall)
-OBLITERATE=$(curl -s https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/git/obliterate)
-
 # Clone the repository into the specified directory
 if $ENABLE_KILL; then
     check_memory_usage
@@ -133,30 +128,44 @@ git clone "$REPO" "$DIR"
 # Navigate into the cloned directory
 cd "$DIR" || exit
 
-# Execute the LFS uninstallation script to replace LFS files with regular Git files
+# Download the LFS uninstallation script
+log "${BLUE}Downloading LFS uninstallation script...${NC}"
+curl -o lfs_uninstall.sh https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/git/lfs/lfs_uninstall
+
+# Execute the LFS uninstallation script with specified options
 if $ENABLE_KILL; then
     check_memory_usage
 fi
 log "${BLUE}Executing LFS uninstallation script...${NC}"
-( eval "$LFS_UNINSTALL" )
+bash lfs_uninstall.sh -k -v -m "$MAX_MEMORY_USAGE"
+
+# Remove the downloaded LFS uninstallation script
+rm -f lfs_uninstall.sh
+
+# Download the obliterate script
+log "${BLUE}Downloading obliterate script...${NC}"
+curl -o obliterate.sh https://raw.githubusercontent.com/SJarod/scripts/refs/heads/master/git/obliterate
 
 # Execute the obliterate script to remove Unreal Engine files from Git history
 if $ENABLE_KILL; then
     check_memory_usage
 fi
 log "${BLUE}Removing Unreal Engine files from Git history...${NC}"
-( eval "$OBLITERATE StarterContent" )
-( eval "$OBLITERATE Intermediate" )
-( eval "$OBLITERATE Saved" )
+bash obliterate.sh StarterContent
+bash obliterate.sh Intermediate
+bash obliterate.sh Saved
 
 # Execute the obliterate script to remove IDE-related files from Git history
 if $ENABLE_KILL; then
     check_memory_usage
 fi
 log "${BLUE}Removing IDE-related files from Git history...${NC}"
-( eval "$OBLITERATE .vs" )
-( eval "$OBLITERATE .vsconfig" )
-( eval "$OBLITERATE .idea" )
+bash obliterate.sh .vs
+bash obliterate.sh .vsconfig
+bash obliterate.sh .idea
+
+# Remove the downloaded obliterate script
+rm -f obliterate.sh
 
 # Completion message
 echo -e "${GREEN}Repository cloned and cleaned successfully.${NC}"
