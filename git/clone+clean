@@ -75,7 +75,6 @@ obliterate_files() {
 
     # Remove IDE-related files
     log "${BLUE}Removing IDE-related files from Git history...${NC}"
-    bash obliterate.sh .vs
     bash obliterate.sh .vsconfig
     bash obliterate.sh .idea
 
