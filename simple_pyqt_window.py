@@ -4,10 +4,10 @@ from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QDialog, QApplication, QFileDialog
 from PyQt5.uic import loadUi
 
-class Window(QDialog) :
+class Window(QtWidgets.QMainWindow) :
     def __init__(self) :
         super(Window, self).__init__()
-        loadUi("gui.ui", self)
+        loadUi("main.ui", self)
 
 app = QApplication(sys.argv)
 window = Window()
