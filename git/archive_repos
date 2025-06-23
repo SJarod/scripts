@@ -1,0 +1,32 @@
+
+# https://stackoverflow.com/a/14371026
+declare -A arr
+arr["projectname"]="projecturl"
+arr+=( ["projectname2"]="projecturl2" )
+
+for key in ${!arr[@]}; do
+    echo ${key} ${arr[${key}]}
+
+    # https://stackoverflow.com/a/34158285
+    git clone --mirror ${arr[${key}]} ${key}
+    cd ${key}
+
+    # make sure all lfs files are downloaded
+    # https://stackoverflow.com/a/79100034
+    git lfs fetch --all
+    git lfs pull
+    git lfs checkout
+
+    # create a bundle (does not work with git lfs)
+    git bundle create ../${key}.bundle --all
+    # create a tarball archive of the bare repo (contents within the .git folder)
+    # https://stackoverflow.com/a/70047401
+    tar -czvf ../${key}.tar.gz .
+    # extract to a directory with
+    #   mkdir dir
+    #   tar -xzvf ${key}.tar.gz -C dir
+
+    cd ..
+    rm -rf ${key}
+
+done
