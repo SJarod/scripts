@@ -1,3 +1,5 @@
+# a simple script to create a bundle and a .tar.gz archive of a list of repositories
+# (given their name and remote url)
 
 # https://stackoverflow.com/a/14371026
 declare -A arr
