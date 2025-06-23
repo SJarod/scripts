@@ -10,7 +10,17 @@ for key in ${!arr[@]}; do
     echo ${key} ${arr[${key}]}
 
     # https://stackoverflow.com/a/34158285
+    # https://stackoverflow.com/a/13794303
     git clone --mirror ${arr[${key}]} ${key}
+    ret=$?
+    while ! test "$ret" -eq 0 
+    do
+        echo "failed to clone ${arr[${key}]}, retrying..."
+        git clone --mirror ${arr[${key}]} ${key}
+        ret=$?
+        sleep 2
+    done
+    
     cd ${key}
 
     # make sure all lfs files are downloaded
