@@ -1,6 +1,8 @@
 import webbrowser
 
 urls = {
+    "url1",
+    "url2"
 }
 
 for url in urls :
