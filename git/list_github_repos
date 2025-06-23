@@ -1,0 +1,31 @@
+# script to list all the repositories of a GitHub account
+# needs a fine-grained token (with proper rights to access private repositories)
+# the private repositories from organizations are not listed
+# the private repositories in which user is invited as collaborator are not listed as well
+
+read -p "Enter GitHub Api Fine-grained token: " token
+read -p "Output filename: " output
+read -p "Repositories visibility (all, public, private): " visibility
+read -p "Organizations to check (seperated by space): " orgs
+
+curl -L \
+  -H "Accept: application/vnd.github+json" \
+  -H "Authorization: Bearer "$token"" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  --url-query per_page=100 \
+  --url-query visibility=$visibility \
+  https://api.github.com/user/repos | \
+  grep "clone_url" > "$output"
+
+for org in $orgs
+do
+  echo $org >> "$output"
+  curl -L \
+    -H "Accept: application/vnd.github+json" \
+    -H "Authorization: Bearer "$token"" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    --url-query per_page=100 \
+    --url-query type=$visibility \
+    https://api.github.com/orgs/$org/repos | \
+    grep "clone_url" >> "$output"
+done
