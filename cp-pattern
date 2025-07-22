@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# copy files following a pattern to another directory
+# it restores the original subdirectories tree
+
+# https://www.redhat.com/en/blog/arguments-options-bash-scripts
+
+# TODO : upgrade with options
+
+files="$(find . -name $1)"
+for f in ${files}
+do
+    out="$2/${f}"
+    dir="$(dirname "${out}")/"
+    if [ ! -d "${dir}" ]; then
+        mkdir -p ${dir}
+    fi
+    cp -f ${f} ${out}
+done
